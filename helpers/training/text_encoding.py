@@ -76,7 +76,15 @@ def get_tokenizers(args):
             from transformers import T5Tokenizer
 
             tokenizer_cls = T5Tokenizer
-            is_t5_model = True
+            is_t5_model = False
+            tokenizer_1 = tokenizer_cls.from_pretrained(
+                get_model_config_path(
+                    args.model_family, args.pretrained_model_name_or_path
+                ),
+                subfolder="tokenizer",
+                revision=args.revision,
+                use_fast=False,
+            )
         elif args.model_family == "sana":
             from transformers import Gemma2Model, GemmaTokenizerFast
 
