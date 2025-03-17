@@ -476,6 +476,7 @@ def collate_fn(batch):
     training_filepaths = []
     conditioning_type = None
     conditioning_pixel_values = None
+    conditioning_latent_batch = None
 
     if len(conditioning_examples) > 0:
         if len(conditioning_examples) != len(examples):
@@ -502,6 +503,9 @@ def collate_fn(batch):
             # Collect conditioning and training file paths
             conditioning_filepaths.append(cond_example.image_path(basename_only=False))
             training_filepaths.append(train_example["image_path"])
+
+        if StateTracker.get_args().control:
+            conditioning_latent_batch = compute_latents(conditioning_filepaths, conditioning_data_backend_id)
 
         # Pass both file paths to `conditioning_pixels`
         conditioning_pixel_values = conditioning_pixels(
@@ -563,6 +567,7 @@ def collate_fn(batch):
         "batch_time_ids": batch_time_ids,
         "batch_luminance": batch_luminance,
         "conditioning_pixel_values": conditioning_pixel_values,
+        "conditioning_latent_batch": conditioning_latent_batch,
         "encoder_attention_mask": attn_mask,
         "is_regularisation_data": is_regularisation_data,
         "conditioning_type": conditioning_type,

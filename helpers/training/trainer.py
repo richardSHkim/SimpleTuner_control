@@ -2106,6 +2106,13 @@ class Trainer:
                         "ControlNet predictions for transformer models are not yet implemented."
                     )
             elif self.config.model_family == "flux":
+                if self.config.control:
+                    # handle condition
+                    control_latents = prepared_batch["conditioning_latent_batch"].to(
+                        dtype=self.config.weight_dtype
+                    )
+                    noisy_latents = torch.cat([noisy_latents, control_latents], dim=1)
+
                 # handle guidance
                 packed_noisy_latents = pack_latents(
                     noisy_latents,

@@ -113,6 +113,24 @@ def load_diffusion_model(args, weight_dtype):
             subfolder=determine_subfolder(args.pretrained_transformer_subfolder),
             **pretrained_load_args,
         )
+
+        if args.control:
+            with torch.no_grad():
+                initial_input_channels = transformer.config.in_channels
+                new_linear = torch.nn.Linear(
+                    transformer.x_embedder.in_features * 2,
+                    transformer.x_embedder.out_features,
+                    bias=transformer.x_embedder.bias is not None,
+                    dtype=transformer.dtype,
+                    device=transformer.device,
+                )
+                new_linear.weight.zero_()
+                new_linear.weight[:, :initial_input_channels].copy_(transformer.x_embedder.weight)
+                if transformer.x_embedder.bias is not None:
+                    new_linear.bias.copy_(transformer.x_embedder.bias)
+                transformer.x_embedder = new_linear
+            assert torch.all(transformer.x_embedder.weight[:, initial_input_channels:].data == 0)
+
         if args.gradient_checkpointing_interval is not None:
             transformer.set_gradient_checkpointing_interval(
                 int(args.gradient_checkpointing_interval)
