@@ -148,6 +148,24 @@ def load_diffusion_model(args, weight_dtype):
             subfolder=determine_subfolder(args.pretrained_transformer_subfolder),
             **pretrained_load_args,
         )
+
+        if args.control:
+            with torch.no_grad():
+                initial_input_channels = transformer.config.in_channels
+                new_proj = torch.nn.Conv2d(
+                    in_channels=transformer.pos_embed.proj.in_channels * 2, 
+                    out_channels=transformer.pos_embed.proj.out_channels, 
+                    kernel_size=transformer.pos_embed.proj.kernel_size, 
+                    stride=transformer.pos_embed.proj.stride, 
+                    bias=transformer.pos_embed.proj.bias,
+                )
+                new_proj.weight.zero_()
+                new_proj.weight[:, :initial_input_channels].copy_(transformer.pos_embed.proj.weight)
+                if transformer.pos_embed.proj.bias is not None:
+                    new_proj.bias.copy_(transformer.pos_embed.proj.bias)
+                transformer.pos_embed.proj = new_proj
+            assert torch.all(transformer.pos_embed.proj.weight[:, initial_input_channels:].data == 0)
+
     elif args.model_family == "smoldit":
         logger.info("Loading SmolDiT model..")
         if args.validation_noise_scheduler is None:

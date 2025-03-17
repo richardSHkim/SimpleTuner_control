@@ -2258,6 +2258,14 @@ class Trainer:
                     raise ValueError(
                         "Pixart Sigma models require a latent size of 4 channels. Ensure you are using the correct VAE cache path."
                     )
+
+                if self.config.control:
+                    # handle condition
+                    control_latents = prepared_batch["conditioning_latent_batch"].to(
+                        dtype=self.config.weight_dtype
+                    )
+                    noisy_latents = torch.cat([noisy_latents, control_latents], dim=1)
+
                 model_pred = self.transformer(
                     noisy_latents,
                     encoder_hidden_states=encoder_hidden_states,

@@ -420,6 +420,14 @@ def get_argument_parser():
         ),
     )
     parser.add_argument(
+        "--control",
+        action="store_true",
+        default=False,
+        help=(
+            "If set, channel-wise control style training will be used, where a conditioning input image is required alongside the training data."
+        ),
+    )
+    parser.add_argument(
         "--controlnet",
         action="store_true",
         default=False,
