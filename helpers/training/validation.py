@@ -1468,7 +1468,6 @@ class Validation:
                 for key, value in self.pipeline.components.items():
                     if hasattr(value, "device"):
                         logger.debug(f"Device for {key}: {value.device}")
-                autocast_ctx = nullcontext()
                 if StateTracker.get_model_family() == "flux":
                     if "negative_prompt" in pipeline_kwargs:
                         del pipeline_kwargs["negative_prompt"]
@@ -1478,7 +1477,6 @@ class Validation:
                             del pipeline_kwargs["negative_prompt_embeds"]
                             del pipeline_kwargs["no_cfg_until_timestep"]
                             pipeline_kwargs["control_image"] = pipeline_kwargs.pop("image")
-                            autocast_ctx = torch.autocast(self.accelerator.device.type, dtype=torch.bfloat16)
                 if self.args.model_family == "sana":
                     pipeline_kwargs["complex_human_instruction"] = (
                         self.args.sana_complex_human_instruction
@@ -1510,7 +1508,7 @@ class Validation:
                         )
                     if current_validation_type == "ema":
                         self.enable_ema_for_inference()
-                    with autocast_ctx:
+                    with torch.autocast(self.accelerator.device.type, dtype=self.weight_dtype):
                         all_validation_type_results[current_validation_type] = (
                             self.pipeline(**pipeline_kwargs).images
                         )
