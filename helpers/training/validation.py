@@ -33,6 +33,7 @@ from helpers.training.deepspeed import (
     prepare_model_for_deepspeed,
 )
 from transformers.utils import ContextManagers
+from contextlib import nullcontext
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("SIMPLETUNER_LOG_LEVEL") or "INFO")
@@ -174,7 +175,7 @@ def retrieve_validation_images():
     """
     args = StateTracker.get_args()
     data_backends = StateTracker.get_data_backends(
-        _type="conditioning" if args.controlnet else "image"
+        _type="conditioning" if (args.controlnet or args.control) else "image"
     )
     validation_data_backend_id = args.eval_dataset_id
     validation_set = []
@@ -185,7 +186,7 @@ def retrieve_validation_images():
         should_skip_dataset = data_backend_config.get("disable_validation", False)
         logger.debug(f"Backend {_data_backend}: {data_backend}")
         if "id" not in data_backend or (
-            args.controlnet and data_backend.get("dataset_type", None) != "conditioning"
+            (args.controlnet or args.control) and data_backend.get("dataset_type", None) != "conditioning"
         ):
             logger.debug(
                 f"Skipping data backend: {_data_backend} dataset_type {data_backend.get('dataset_type', None)}"
@@ -622,6 +623,7 @@ class Validation:
             self.deepfloyd_stage2
             or self.args.validation_using_datasets
             or self.args.controlnet
+            or self.args.control
         ):
             self.validation_image_inputs = retrieve_validation_images()
             # Validation inputs are in the format of a list of tuples:
@@ -641,14 +643,17 @@ class Validation:
                 return StableDiffusionXLImg2ImgPipeline
             return StableDiffusionXLPipeline
         elif model_type == "flux":
-            from helpers.models.flux import FluxPipeline
+            if self.args.control:
+                from diffusers import FluxControlPipeline as FluxPipeline
+            else:
+                from helpers.models.flux import FluxPipeline
 
             if self.args.controlnet:
                 raise NotImplementedError("Flux ControlNet is not yet supported.")
-            if self.args.validation_using_datasets:
-                raise NotImplementedError(
-                    "Flux inference validation using img2img is not yet supported. Please remove --validation_using_datasets."
-                )
+            # if self.args.validation_using_datasets:
+            #     raise NotImplementedError(
+            #         "Flux inference validation using img2img is not yet supported. Please remove --validation_using_datasets."
+            #     )
             return FluxPipeline
         elif model_type == "kolors":
             if self.args.controlnet:
@@ -1463,9 +1468,17 @@ class Validation:
                 for key, value in self.pipeline.components.items():
                     if hasattr(value, "device"):
                         logger.debug(f"Device for {key}: {value.device}")
+                autocast_ctx = nullcontext()
                 if StateTracker.get_model_family() == "flux":
                     if "negative_prompt" in pipeline_kwargs:
                         del pipeline_kwargs["negative_prompt"]
+                        if StateTracker.get_args().control:
+                            del pipeline_kwargs["strength"]
+                            del pipeline_kwargs["negative_pooled_prompt_embeds"]
+                            del pipeline_kwargs["negative_prompt_embeds"]
+                            del pipeline_kwargs["no_cfg_until_timestep"]
+                            pipeline_kwargs["control_image"] = pipeline_kwargs.pop("image")
+                            autocast_ctx = torch.autocast(self.accelerator.device.type, dtype=torch.bfloat16)
                 if self.args.model_family == "sana":
                     pipeline_kwargs["complex_human_instruction"] = (
                         self.args.sana_complex_human_instruction
@@ -1497,9 +1510,10 @@ class Validation:
                         )
                     if current_validation_type == "ema":
                         self.enable_ema_for_inference()
-                    all_validation_type_results[current_validation_type] = (
-                        self.pipeline(**pipeline_kwargs).images
-                    )
+                    with autocast_ctx:
+                        all_validation_type_results[current_validation_type] = (
+                            self.pipeline(**pipeline_kwargs).images
+                        )
                     if current_validation_type == "ema":
                         self.disable_ema_for_inference()
 
@@ -1510,7 +1524,7 @@ class Validation:
                 )
                 original_validation_image_results = validation_image_results
                 benchmark_image = None
-                if self.args.controlnet:
+                if self.args.controlnet or self.args.control:
                     validation_image_results = self.stitch_conditioning_images(
                         original_validation_image_results,
                         extra_validation_kwargs["image"],
