@@ -94,7 +94,14 @@ def load_diffusion_model(args, weight_dtype):
         if pretrained_transformer_path.lower().endswith(".safetensors"):
             transformer_load_fn = FluxTransformer2DModel.from_single_file
 
+        transformer = transformer_load_fn(
+            pretrained_transformer_path,
+            subfolder=determine_subfolder(args.pretrained_transformer_subfolder),
+            **pretrained_load_args,
+        )
+
         if args.control:
+            import torch
             with torch.no_grad():
                 initial_input_channels = transformer.config.in_channels
                 new_linear = torch.nn.Linear(
@@ -110,12 +117,8 @@ def load_diffusion_model(args, weight_dtype):
                     new_linear.bias.copy_(transformer.x_embedder.bias)
                 transformer.x_embedder = new_linear
             assert torch.all(transformer.x_embedder.weight[:, initial_input_channels:].data == 0)
+            transformer.register_to_config(in_channels=initial_input_channels * 2, out_channels=initial_input_channels)
 
-        transformer = transformer_load_fn(
-            pretrained_transformer_path,
-            subfolder=determine_subfolder(args.pretrained_transformer_subfolder),
-            **pretrained_load_args,
-        )
     elif args.model_family.lower() == "flux" and args.flux_attention_masked_training:
         from helpers.models.flux.transformer import (
             FluxTransformer2DModelWithMasking,
@@ -150,6 +153,7 @@ def load_diffusion_model(args, weight_dtype):
         )
 
         if args.control:
+            import torch
             with torch.no_grad():
                 initial_input_channels = transformer.config.in_channels
                 new_proj = torch.nn.Conv2d(
@@ -157,7 +161,7 @@ def load_diffusion_model(args, weight_dtype):
                     out_channels=transformer.pos_embed.proj.out_channels, 
                     kernel_size=transformer.pos_embed.proj.kernel_size, 
                     stride=transformer.pos_embed.proj.stride, 
-                    bias=transformer.pos_embed.proj.bias,
+                    bias=transformer.pos_embed.proj.bias is not None,
                 )
                 new_proj.weight.zero_()
                 new_proj.weight[:, :initial_input_channels].copy_(transformer.pos_embed.proj.weight)
@@ -165,6 +169,7 @@ def load_diffusion_model(args, weight_dtype):
                     new_proj.bias.copy_(transformer.pos_embed.proj.bias)
                 transformer.pos_embed.proj = new_proj
             assert torch.all(transformer.pos_embed.proj.weight[:, initial_input_channels:].data == 0)
+            transformer.register_to_config(in_channels=initial_input_channels * 2, out_channels=initial_input_channels)
 
     elif args.model_family == "smoldit":
         logger.info("Loading SmolDiT model..")
