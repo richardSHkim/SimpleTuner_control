@@ -2106,13 +2106,6 @@ class Trainer:
                         "ControlNet predictions for transformer models are not yet implemented."
                     )
             elif self.config.model_family == "flux":
-                if self.config.control:
-                    # handle condition
-                    control_latents = prepared_batch["conditioning_latent_batch"].to(
-                        dtype=self.config.weight_dtype
-                    )
-                    noisy_latents = torch.cat([noisy_latents, control_latents], dim=1)
-
                 # handle guidance
                 packed_noisy_latents = pack_latents(
                     noisy_latents,
@@ -2124,6 +2117,28 @@ class Trainer:
                     dtype=self.config.base_weight_dtype,
                     device=self.accelerator.device,
                 )
+                
+                if self.config.control:
+                    # handle condition
+                    control_image = prepared_batch["conditioning_pixel_values"].to(
+                        dtype=self.config.base_weight_dtype
+                    ) #[-1, 1], cuda
+                    
+                    control_image = self.vae.encode(control_image).latent_dist.sample(generator=None)
+                    control_image = (control_image - self.vae.config.shift_factor) * self.vae.config.scaling_factor
+
+                    height_control_image, width_control_image = control_image.shape[2:]
+                    
+                    batch_size = noisy_latents.shape[0]
+                    num_channels_latents = noisy_latents.shape[1]
+                    height = height_control_image
+                    width = width_control_image
+                    control_image = control_image.view(batch_size, num_channels_latents, height // 2, 2, width // 2, 2)
+                    control_image = control_image.permute(0, 2, 4, 1, 3, 5)
+                    control_latents = control_image.reshape(batch_size, (height // 2) * (width // 2), num_channels_latents * 4)
+
+                    packed_noisy_latents = torch.cat([packed_noisy_latents, control_latents], dim=2)
+
                 if self.config.flux_guidance_mode == "mobius":
                     guidance_scales = get_mobius_guidance(
                         self.config,
