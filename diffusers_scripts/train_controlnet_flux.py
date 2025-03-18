@@ -51,7 +51,7 @@ from diffusers import (
     FlowMatchEulerDiscreteScheduler,
     FluxTransformer2DModel,
 )
-from diffusers.models.controlnet_flux import FluxControlNetModel
+from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
 from diffusers.optimization import get_scheduler
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
 from diffusers.training_utils import compute_density_for_timestep_sampling, free_memory
@@ -458,6 +458,16 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
+        "--wandb_project_name",
+        type=str,
+        default="test",
+    )
+    parser.add_argument(
+        "--wandb_run_name",
+        type=str,
+        default="test",
+    )
+    parser.add_argument(
         "--mixed_precision",
         type=str,
         default=None,
@@ -594,6 +604,11 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help="Path to the jsonl file containing the training data.",
+    )
+    parser.add_argument(
+        "--data_root",
+        type=str,
+        default=None,
     )
 
     parser.add_argument(
@@ -756,13 +771,13 @@ def prepare_train_dataset(dataset, accelerator):
 
     def preprocess_train(examples):
         images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
+            (image.convert("RGB") if not isinstance(image, str) else Image.open(os.path.join(args.data_root, image)).convert("RGB"))
             for image in examples[args.image_column]
         ]
         images = [image_transforms(image) for image in images]
 
         conditioning_images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
+            (image.convert("RGB") if not isinstance(image, str) else Image.open(os.path.join(args.data_root, image)).convert("RGB"))
             for image in examples[args.conditioning_image_column]
         ]
         conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
@@ -1163,7 +1178,13 @@ def main(args):
         tracker_config.pop("validation_prompt")
         tracker_config.pop("validation_image")
 
-        accelerator.init_trackers(args.tracker_project_name, config=tracker_config)
+        accelerator.init_trackers(
+            args.wandb_project_name,
+            config=tracker_config,
+            init_kwargs={
+                "wandb": {"name": args.wandb_run_name}
+            },
+        )
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
