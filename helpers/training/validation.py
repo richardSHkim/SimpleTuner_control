@@ -649,7 +649,8 @@ class Validation:
                 from helpers.models.flux import FluxPipeline
 
             if self.args.controlnet:
-                raise NotImplementedError("Flux ControlNet is not yet supported.")
+                # raise NotImplementedError("Flux ControlNet is not yet supported.")
+                from diffusers import FluxControlNetPipeline as FluxPipeline
             # if self.args.validation_using_datasets:
             #     raise NotImplementedError(
             #         "Flux inference validation using img2img is not yet supported. Please remove --validation_using_datasets."
@@ -1480,6 +1481,9 @@ class Validation:
                             del pipeline_kwargs["negative_prompt_embeds"]
                             del pipeline_kwargs["no_cfg_until_timestep"]
                             pipeline_kwargs["control_image"] = pipeline_kwargs.pop("image")
+                    if StateTracker.get_args().controlnet:
+                        del pipeline_kwargs["no_cfg_until_timestep"]
+                        pipeline_kwargs["control_image"] = pipeline_kwargs.pop("image")
                 if self.args.model_family == "sana":
                     pipeline_kwargs["complex_human_instruction"] = (
                         self.args.sana_complex_human_instruction

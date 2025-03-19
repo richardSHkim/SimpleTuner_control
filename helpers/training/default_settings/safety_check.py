@@ -50,7 +50,7 @@ def safety_check(args, accelerator):
     ):
         validate_deepspeed_compat_from_args(accelerator, args)
     if args.controlnet:
-        if args.model_family in ["pixart_sigma", "sd3", "kolors", "flux", "smoldit"]:
+        if args.model_family in ["pixart_sigma", "sd3", "kolors", "smoldit"]:
             raise ValueError(
                 f"ControlNet is not yet supported with {args.model_type} models. Please disable --controlnet, or switch model types."
             )

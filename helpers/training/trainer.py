@@ -883,14 +883,24 @@ class Trainer:
         if not self.config.controlnet:
             return
         logger.info("Creating the controlnet..")
+        if self.config.model_family == "flux":
+            from diffusers import FluxControlNetModel
         if self.config.controlnet_model_name_or_path:
             logger.info("Loading existing controlnet weights")
-            self.controlnet = ControlNetModel.from_pretrained(
-                self.config.controlnet_model_name_or_path
-            )
+            if self.config.model_family == "flux":
+                self.controlnet = FluxControlNetModel.from_pretrained(
+                    self.config.controlnet_model_name_or_path
+                )
+            else:
+                self.controlnet = ControlNetModel.from_pretrained(
+                    self.config.controlnet_model_name_or_path
+                )
         else:
             logger.info("Initializing controlnet weights from unet")
-            self.controlnet = ControlNetModel.from_unet(self.unet)
+            if self.config.model_family == "flux":
+                self.controlnet = FluxControlNetModel.from_transformer(self.transformer)
+            else:
+                self.controlnet = ControlNetModel.from_unet(self.unet)
 
         self.accelerator.wait_for_everyone()
 
@@ -2071,7 +2081,7 @@ class Trainer:
         if custom_timesteps is not None:
             timesteps = custom_timesteps
         if not self.config.disable_accelerator:
-            if self.config.controlnet:
+            if self.config.controlnet and self.config.model_family != "flux":
                 # ControlNet conditioning.
                 controlnet_image = prepared_batch["conditioning_pixel_values"].to(
                     dtype=self.config.weight_dtype
@@ -2127,15 +2137,16 @@ class Trainer:
                     control_image = self.vae.encode(control_image).latent_dist.sample(generator=None)
                     control_image = (control_image - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
-                    height_control_image, width_control_image = control_image.shape[2:]
-                    
-                    batch_size = noisy_latents.shape[0]
-                    num_channels_latents = noisy_latents.shape[1]
-                    height = height_control_image
-                    width = width_control_image
-                    control_image = control_image.view(batch_size, num_channels_latents, height // 2, 2, width // 2, 2)
-                    control_image = control_image.permute(0, 2, 4, 1, 3, 5)
-                    control_latents = control_image.reshape(batch_size, (height // 2) * (width // 2), num_channels_latents * 4)
+                    control_latents = pack_latents(
+                        control_image,
+                        batch_size=control_image.shape[0],
+                        num_channels_latents=control_image.shape[1],
+                        height=control_image.shape[2],
+                        width=control_image.shape[3],
+                    ).to(
+                        dtype=self.config.base_weight_dtype,
+                        device=self.accelerator.device,
+                    )
 
                     packed_noisy_latents = torch.cat([packed_noisy_latents, control_latents], dim=2)
 
@@ -2236,6 +2247,43 @@ class Trainer:
                         raise ValueError(
                             "No attention mask was discovered when attempting validation - this means you need to recreate your text embed cache."
                         )
+
+                if self.config.controlnet:
+                    controlnet_image = prepared_batch["conditioning_pixel_values"].to(
+                        dtype=self.config.weight_dtype
+                    )
+                    control_latents = self.vae.encode(controlnet_image).latent_dist.sample()
+                    control_latents = (control_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
+                    control_image = self.controlnet._pack_latents(
+                        control_latents,
+                        controlnet_image.shape[0],
+                        control_latents.shape[1],
+                        control_latents.shape[2],
+                        control_latents.shape[3],
+                    )
+
+                    controlnet_block_samples, controlnet_single_block_samples = self.controlnet(
+                        hidden_states=packed_noisy_latents,
+                        controlnet_cond=control_image,
+                        timestep=timesteps,
+                        guidance=guidance,
+                        pooled_projections=prepared_batch["add_text_embeds"].to(
+                            device=self.accelerator.device,
+                            dtype=self.config.base_weight_dtype,
+                        ),
+                        encoder_hidden_states=prepared_batch["prompt_embeds"].to(
+                            device=self.accelerator.device,
+                            dtype=self.config.base_weight_dtype,
+                        ),
+                        txt_ids=text_ids.to(
+                            device=self.accelerator.device,
+                            dtype=self.config.base_weight_dtype,
+                        ),
+                        img_ids=img_ids,
+                        return_dict=False,
+                    )
+                    flux_transformer_kwargs["controlnet_block_samples"] = [sample.to(dtype=self.config.base_weight_dtype) for sample in controlnet_block_samples]
+                    flux_transformer_kwargs["controlnet_single_block_samples"] = [sample.to(dtype=self.config.base_weight_dtype) for sample in controlnet_single_block_samples]
 
                 model_pred = self.transformer(**flux_transformer_kwargs)[0]
 
