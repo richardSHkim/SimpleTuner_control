@@ -2276,9 +2276,12 @@ class Trainer:
 
                 if self.config.control:
                     # handle condition
-                    control_latents = prepared_batch["conditioning_latent_batch"].to(
+                    control_image = prepared_batch["conditioning_pixel_values"].to(
                         dtype=self.config.weight_dtype
                     )
+                    control_latents = self.vae.encode(control_image).latent_dist.sample(generator=None)
+                    control_latents = control_latents * self.vae.config.scaling_factor
+
                     noisy_latents = torch.cat([noisy_latents, control_latents], dim=1)
 
                 model_pred = self.transformer(

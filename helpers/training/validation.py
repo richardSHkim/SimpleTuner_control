@@ -686,6 +686,9 @@ class Validation:
                 return StableDiffusion3Img2ImgPipeline
             return StableDiffusion3Pipeline
         elif model_type == "pixart_sigma":
+            if self.args.control:
+                from helpers.models.pixart.pipeline_control import PixArtSigmaControlPipeline
+                return PixArtSigmaControlPipeline
             if self.args.controlnet:
                 raise Exception(
                     "PixArt Sigma ControlNet inference validation is not yet supported."
