@@ -126,6 +126,7 @@ def get_argument_parser():
             "context+ffs",
             "all",
             "all+ffs",
+            "all+ffs+embedder",
             "ai-toolkit",
             "tiny",
             "nano",
