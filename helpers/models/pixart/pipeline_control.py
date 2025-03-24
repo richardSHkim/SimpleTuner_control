@@ -846,7 +846,7 @@ class PixArtSigmaControlPipeline(DiffusionPipeline):
             control_image = control_image * self.vae.config.scaling_factor
 
         # 5. Prepare latents.
-        latent_channels = self.transformer.config.in_channels
+        latent_channels = self.transformer.config.in_channels // 2
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
             latent_channels,
@@ -869,7 +869,7 @@ class PixArtSigmaControlPipeline(DiffusionPipeline):
 
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                latent_model_input = torch.cat([latents, control_image], dim=2)
+                latent_model_input = torch.cat([latents, control_image], dim=1)
                 latent_model_input = torch.cat([latent_model_input] * 2) if do_classifier_free_guidance else latent_model_input
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
