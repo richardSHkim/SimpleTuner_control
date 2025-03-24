@@ -169,7 +169,7 @@ def load_diffusion_model(args, weight_dtype):
                     new_proj.bias.copy_(transformer.pos_embed.proj.bias)
                 transformer.pos_embed.proj = new_proj
             assert torch.all(transformer.pos_embed.proj.weight[:, initial_input_channels:].data == 0)
-            transformer.register_to_config(in_channels=initial_input_channels * 2, out_channels=initial_input_channels)
+            transformer.register_to_config(in_channels=initial_input_channels * 2)
 
     elif args.model_family == "smoldit":
         logger.info("Loading SmolDiT model..")
