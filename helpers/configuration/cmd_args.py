@@ -333,6 +333,11 @@ def get_argument_parser():
         ),
     )
     parser.add_argument(
+        "--masked_loss_prob",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
         "--sd3_clip_uncond_behaviour",
         type=str,
         choices=["empty_string", "zero"],

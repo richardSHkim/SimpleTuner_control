@@ -63,7 +63,7 @@ class MultiAspectSampler(torch.utils.data.Sampler):
             os.environ.get("SIMPLETUNER_LOG_LEVEL", "INFO"),
         )
         if conditioning_type is not None:
-            if conditioning_type not in ["controlnet", "mask"]:
+            if conditioning_type not in ["controlnet", "mask", "segmentation"]:
                 raise ValueError(
                     f"Unknown conditioning image type: {conditioning_type}"
                 )

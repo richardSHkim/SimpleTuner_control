@@ -2698,6 +2698,20 @@ class Trainer:
             )  # Resize to match loss spatial dimensions
             mask_image = mask_image / 2 + 0.5  # Normalize to [0,1]
             loss = loss * mask_image  # Element-wise multiplication
+        elif conditioning_type == "segmentation" and apply_conditioning_mask:
+            if random.random() < self.config.masked_loss_prob:
+                mask_image = (
+                    prepared_batch["conditioning_pixel_values"]
+                    .to(dtype=loss.dtype, device=loss.device)
+                )  # Shape: (batch_size, 3, H', W')
+                mask_image = torch.sum(mask_image, dim=1, keepdim=True) / 3
+                mask_image = torch.nn.functional.interpolate(
+                    mask_image, size=loss.shape[2:], mode="area"
+                )  # Resize to match loss spatial dimensions
+                mask_image = mask_image / 2 + 0.5  # Normalize to [0,1]
+                # binarize
+                mask_image = (mask_image > 0).to(dtype=loss.dtype, device=loss.device)
+                loss = loss * mask_image  # Element-wise multiplication
 
         # Reduce the loss by averaging over channels and spatial dimensions
         loss = loss.mean(dim=list(range(1, len(loss.shape))))  # Shape: (batch_size,)
