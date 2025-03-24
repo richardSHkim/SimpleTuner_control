@@ -463,6 +463,12 @@ def get_argument_parser():
         help="Path to pretrained transformer model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
+        "--pretrained_transformer_lora_name_or_path",
+        type=str,
+        default=None,
+        help="Path to pretrained transformer lora or lora identifier from huggingface.co/models.",
+    )
+    parser.add_argument(
         "--pretrained_transformer_subfolder",
         type=str,
         default="transformer",

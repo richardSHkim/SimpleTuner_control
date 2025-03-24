@@ -119,6 +119,12 @@ def load_diffusion_model(args, weight_dtype):
             assert torch.all(transformer.x_embedder.weight[:, initial_input_channels:].data == 0)
             transformer.register_to_config(in_channels=initial_input_channels * 2, out_channels=initial_input_channels)
 
+        # merge pretrained lora
+        if args.pretrained_transformer_lora_name_or_path:
+            transformer.load_lora_adapter(args.pretrained_transformer_lora_name_or_path)
+            transformer.fuse_lora()
+            transformer.unload_lora()
+
     elif args.model_family.lower() == "flux" and args.flux_attention_masked_training:
         from helpers.models.flux.transformer import (
             FluxTransformer2DModelWithMasking,
