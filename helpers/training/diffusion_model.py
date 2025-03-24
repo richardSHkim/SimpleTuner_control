@@ -100,7 +100,7 @@ def load_diffusion_model(args, weight_dtype):
             **pretrained_load_args,
         )
 
-        if args.control:
+        if args.control and args.pretrained_transformer_model_name_or_path is None:
             import torch
             with torch.no_grad():
                 initial_input_channels = transformer.config.in_channels
@@ -152,7 +152,7 @@ def load_diffusion_model(args, weight_dtype):
             **pretrained_load_args,
         )
 
-        if args.control:
+        if args.control and args.pretrained_transformer_model_name_or_path is None:
             import torch
             with torch.no_grad():
                 initial_input_channels = transformer.config.in_channels
